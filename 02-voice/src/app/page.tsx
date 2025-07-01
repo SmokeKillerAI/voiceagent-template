@@ -9,12 +9,9 @@ import {
 } from "@openai/agents-realtime";
 import { getSessionToken } from "./server/token";
 import z from "zod";
-import { runDailyDataParserAgent } from "./server/agent";
+import { runDailyDataParser } from "./server/AIs";
 import { EventEmitter } from "events";
 
-// 创建全局事件发射器用于状态通信
-const dataEventEmitter = new EventEmitter();
-dataEventEmitter.setMaxListeners(50);
 
 // 用户数据存储
 let collectedUserData: Record<string, string> = {};
@@ -107,12 +104,10 @@ const getFinalDailyData = tool({
 		}
 
 		// 调用解析 agent 获取结构化数据
-		const parsedData = await runDailyDataParserAgent(
+		const parsedData = await runDailyDataParser(
 			JSON.stringify(collectedUserData)
 		);
 
-		// 发射解析后的数据事件
-		dataEventEmitter.emit("parsedUserData", parsedData);
 
 		// 现在可以安全地重置数据了
 		resetDataCollection();
@@ -187,22 +182,8 @@ export default function Home() {
 	const session = useRef<RealtimeSession | null>(null);
 	const [connected, setConnected] = useState(false);
 	const [history, setHistory] = useState<RealtimeItem[]>([]);
-	const [userData, setUserData] = useState<any>(null); // 改为 any 以接收解析后的结构化数据
+	const [userData, setUserData] = useState<any>(null); 
 
-	// 监听解析后的用户数据
-	useEffect(() => {
-		const handleParsedUserData = (parsedData: any) => {
-			console.log("Received parsed user data:", parsedData);
-			setUserData(parsedData);
-		};
-
-		dataEventEmitter.on("parsedUserData", handleParsedUserData);
-
-		// 清理函数
-		return () => {
-			dataEventEmitter.off("parsedUserData", handleParsedUserData);
-		};
-	}, []);
 
 	async function onConnect() {
 		if (connected) {
