@@ -8,11 +8,12 @@ export async function getSessionToken() {
   });
 
   const session = await openai.beta.realtime.sessions.create({
-    model: "gpt-4o-mini-realtime-preview",
+    model: "gpt-4o-realtime-preview",
   });
 
   return session.client_secret.value;
-};
+}
+
 export async function getMem0Token() {
   return process.env.MEM_API_KEY || "";
 }
