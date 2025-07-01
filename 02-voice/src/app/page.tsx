@@ -202,6 +202,8 @@ async function storeChatHistoryToMemory(
       .filter((msg) => msg.content.trim().length > 0);
     
     console.log(messages);
+    
+    // Store chat history
     if (messages.length > 0) {
       const result = await addToMemory(messages, userId);
       if (result.success) {
@@ -210,8 +212,80 @@ async function storeChatHistoryToMemory(
         console.error("Failed to store chat history:", result.error);
       }
     }
+
+    // Extract and store structured results
+    await extractAndStoreStructuredResults(messages, userId);
+    
   } catch (error) {
     console.error("Error storing chat history to memory:", error);
+  }
+}
+
+// Function to extract structured results and store them separately
+async function extractAndStoreStructuredResults(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  userId: string = "default_user"
+) {
+  try {
+    // Look for structured data in assistant messages
+    const structuredResults = messages
+      .filter((msg) => msg.role === "assistant")
+      .map((msg) => {
+        try {
+          // Try to parse JSON structures from assistant responses
+          const jsonMatch = msg.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsedData = JSON.parse(jsonMatch[0]);
+            return parsedData;
+          }
+        } catch (e) {
+          // Not valid JSON, skip
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Also check for collected user data if it exists
+    if (Object.keys(collectedUserData).length > 0) {
+      const userStructuredData = {
+        type: "user_profile",
+        data: {
+          personal_info: {
+            full_name: collectedUserData.name,
+            age: parseInt(collectedUserData.age) || 0,
+            contact: {
+              email: collectedUserData.email,
+              phone: collectedUserData.phone,
+            },
+            location: collectedUserData.city,
+          },
+          collected_at: new Date().toISOString(),
+          status: "processed",
+        },
+        user_name: collectedUserData.name || "Unknown User"
+      };
+      structuredResults.push(userStructuredData);
+    }
+
+    // Store structured results with user-specific naming
+    for (const structuredData of structuredResults) {
+      const userName = structuredData.user_name || structuredData.data?.personal_info?.full_name || userId;
+      const structuredMessage = [
+        {
+          role: "assistant" as const,
+          content: `Structured data for ${userName}: ${JSON.stringify(structuredData, null, 2)}`
+        }
+      ];
+
+      const result = await addToMemory(structuredMessage, userId);
+      if (result.success) {
+        console.log(`Structured data for ${userName} stored to memory successfully`);
+      } else {
+        console.error(`Failed to store structured data for ${userName}:`, result.error);
+      }
+    }
+  } catch (error) {
+    console.error("Error extracting and storing structured results:", error);
   }
 }
 
