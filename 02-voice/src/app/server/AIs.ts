@@ -6,11 +6,10 @@ import openai from "./client";
 
 // 定义结构化输出的 schema
 const DailyDataSchema = z.object({
-  date: z.string().describe("Today's date in YYYY-MM-DD format"),
-  name: z.string().describe("The person's full name"),
-  email: z.string().email().describe("Valid email address"),
-  phone: z.string().regex(/^\d{10}$/).describe("10-digit phone number"),
-  city: z.string().describe("City name"),
+  daily_cigarettes: z.number().describe("The number of cigarettes smoked today"),
+  daily_sleep: z.number().describe("The number of hours slept last night"),
+  daily_feeling: z.string().describe("How the user felt today"),
+  daily_reason: z.string().describe("The reason for smoking today"),
 });
 
 // 使用类型推断获取 schema 的类型
