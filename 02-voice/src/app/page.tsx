@@ -144,7 +144,24 @@ async function storeChatHistoryToMemory(
     
     // Store chat history
     if (messages.length > 0) {
-      const result = await addToMemory(messages, userId);
+      // Add timestamp message to indicate when the dialogue occurred
+      const timestampMessage = {
+        role: "assistant" as const,
+        content: `Dialogue session recorded at: ${new Date().toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZoneName: 'short'
+        })}`
+      };
+      
+      const messagesWithTimestamp = [...messages, timestampMessage];
+      
+      const result = await addToMemory(messagesWithTimestamp, userId);
       if (result.success) {
         console.log("Chat history stored to memory successfully");
       } else {
