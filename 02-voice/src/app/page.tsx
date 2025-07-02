@@ -330,13 +330,20 @@ export default function Home() {
 	const [connected, setConnected] = useState(false);
 	const [history, setHistory] = useState<RealtimeItem[]>([]);
 	const [userData, setUserData] = useState<any>(null);
+	const [username, setUsername] = useState<string>("");
 
 	async function onConnect() {
 		if (connected) {
-			// Store chat history to memory before disconnecting
-			await storeChatHistoryToMemory(history);
+			// Immediately update UI to show disconnecting state
 			setConnected(false);
 			session.current?.close();
+			
+			// Store to memory in background without blocking UI
+			const userId = username.trim() || "anonymous_user";
+			storeChatHistoryToMemory(history, userId).catch(error => {
+				console.error("Failed to store chat history:", error);
+				// Could show a toast notification about storage failure in the future
+			});
 		} else {
 			const token = await getSessionToken();
 			session.current = new RealtimeSession(dataCollectionAgent, {
@@ -381,12 +388,38 @@ export default function Home() {
 					Welcome to your daily progress tracker!
 				</h3>
 				<p className="text-blue-700">
-					Click Connect to start recording your daily progress with our friendly pirate captain guide.
+					Enter your name below and click Connect to start recording your daily progress with our friendly pirate captain guide.
 				</p>
 			</div>
+			
+			<div className="mb-4">
+				<label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+					Your Name (for memory storage)
+				</label>
+				<input
+					id="username"
+					type="text"
+					value={username}
+					onChange={(e) => setUsername(e.target.value)}
+					placeholder="Enter your name..."
+					className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+					disabled={connected}
+				/>
+				{username.trim() && (
+					<p className="mt-1 text-sm text-green-600">
+						Your progress will be saved under: "{username.trim()}"
+					</p>
+				)}
+				{!username.trim() && (
+					<p className="mt-1 text-sm text-gray-500">
+						Leave empty to use "anonymous_user"
+					</p>
+				)}
+			</div>
+			
 			<button
 				onClick={onConnect}
-				className="bg-black text-white p-2 rounded-md hover:bg-gray-800 cursor-pointer"
+				className="bg-black text-white p-2 rounded-md hover:bg-gray-800 cursor-pointer disabled:bg-gray-400 disabled:cursor-not-allowed"
 			>
 				{connected ? "Disconnect" : "Connect"}
 			</button>
