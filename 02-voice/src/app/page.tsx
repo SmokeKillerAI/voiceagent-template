@@ -10,25 +10,13 @@ import {
 import { getSessionToken } from "./server/token";
 import z from "zod";
 import { runDailyDataParser } from "./server/AIs";
-import { EventEmitter } from "events";
-
 
 // 用户数据存储
 let collectedUserData: Record<string, string> = {};
-let currentQuestionIndex = 0;
-
-const questions = [
-	{ key: "name", question: "What's your full name?" },
-	{ key: "age", question: "How old are you?" },
-	{ key: "email", question: "What's your email address?" },
-	{ key: "phone", question: "What's your phone number?" },
-	{ key: "city", question: "What city do you live in?" },
-];
 
 // 重置数据收集状态
 const resetDataCollection = () => {
 	collectedUserData = {};
-	currentQuestionIndex = 0;
 };
 
 // 数据收集工具
@@ -36,7 +24,7 @@ const recordUserData = tool({
 	name: "recordUserData",
 	description: "Record user data during the interview process",
 	parameters: z.object({
-		field: z.string().describe("The field name (e.g., 'name', 'age', 'email')"),
+		field: z.string().describe("The field name (e.g., 'daily_cigarettes', 'daily_sleep', 'daily_feeling', 'daily_reason')"),
 		value: z.string().describe("The user's response"),
 		isComplete: z.boolean().describe("Whether all data collection is complete"),
 	}),
@@ -58,36 +46,11 @@ const recordUserData = tool({
 			)}. The information has been processed and structured.`;
 		}
 
-		// 移动到下一个问题
-		currentQuestionIndex++;
-
-		if (currentQuestionIndex < questions.length) {
-			const nextQuestion = questions[currentQuestionIndex];
-			return `Recorded ${field}. Now, ${nextQuestion.question}`;
-		}
-
 		return `Recorded ${field}. Continue with the next question.`;
 	},
 });
 
-// 获取当前问题的工具
-const getCurrentQuestion = tool({
-	name: "getCurrentQuestion",
-	description: "Get the current question to ask the user",
-	parameters: z.object({}),
-	execute: async () => {
-		if (
-			currentQuestionIndex >= questions.length &&
-			Object.keys(collectedUserData).length === questions.length
-		) {
-			return "All questions have been asked.";
-		} else if (Object.keys(collectedUserData).length < questions.length) {
-			return ` The user has not answered all questions. Ask: "${questions[currentQuestionIndex].question}"`;
-		} else {
-			return "All questions have been asked.";
-		}
-	},
-});
+let parsedData: any;
 
 const getFinalDailyData = tool({
 	name: "getFinalDailyData",
@@ -108,7 +71,6 @@ const getFinalDailyData = tool({
 			JSON.stringify(collectedUserData)
 		);
 
-
 		// 现在可以安全地重置数据了
 		resetDataCollection();
 
@@ -124,14 +86,11 @@ async function sendToParseAgent(rawData: Record<string, string>) {
 
 	// 模拟结构化输出
 	const structuredData = {
-		personal_info: {
-			full_name: rawData.name,
-			age: parseInt(rawData.age) || 0,
-			contact: {
-				email: rawData.email,
-				phone: rawData.phone,
-			},
-			location: rawData.city,
+		daily_data: {
+			daily_cigarettes: parseInt(rawData.daily_cigarettes) || 0,
+			daily_sleep: parseInt(rawData.daily_sleep) || 0,
+			daily_feeling: rawData.daily_feeling,
+			daily_reason: rawData.daily_reason,
 		},
 		collected_at: new Date().toISOString(),
 		status: "processed",
@@ -143,47 +102,88 @@ async function sendToParseAgent(rawData: Record<string, string>) {
 // 数据收集 Agent（改进版）
 const dataCollectionAgent = new RealtimeAgent({
 	name: "Data Collection Agent",
+	voice: "ballad",
 	instructions: `
 		You are a friendly data collection agent. Your job is to collect user information through a structured interview.
+
+		VOICE: Deep and rugged, with a hearty, boisterous quality, like a seasoned sea captain who's seen many voyages.\n\n
+		
+		TONE: Friendly and spirited, with a sense of adventure and enthusiasm, making every detail feel like part of a grand journey.
+		
+		DIALECT: Classic pirate speech but not with old-timey nautical phrases.
+		
+		PRONUNCIATION: Rough and exaggerated, with drawn-out vowels, rolling \"r\"s, and a rhythm that mimics the rise and fall of ocean waves.
+		
+		FEATURES: Uses playful pirate slang, adds dramatic pauses for effect, and blends hospitality with seafaring charm to keep the experience fun and immersive.
 		
 		WORKFLOW:
 		1. When you start, say greeting to the user, tell the user that you need to collect daily data for them.
 		2. If the user is ready, ask from the first question
 		3. Ask the question and wait for the user's response
 		4. Use recordUserData to save their answer
-		5. If the user is not ready, ask the user if they are ready to start
-		6. The recordUserData tool will tell you what to ask next
-		7. Continue until all questions are completed
-		8. When all questions are completed, call getFinalDailyData tool
+		5. Continue until all questions are completed
+		6. When all questions are completed, call getFinalDailyData tool
 		
 		QUESTION SEQUENCE (handled automatically by tools):
-		1. Full name
-		2. Age  
-		3. Email address
-		4. Phone number
-		5. City
+		1. How many cigarettes did you smoke today?
+		2. How many hours did you sleep last night?
+		3. How did you feel today?
+		4. The reason for smoking today?
+
 		
 		IMPORTANT RULES:
 		- Ask ONE question at a time
 		- Wait for the user's response before proceeding
-		- Use recordUserData after each response
+		- Use recordUserData after each answer, but not anyother information
 		- Be conversational and friendly
 		- If a user gives an unclear answer, ask for clarification
 		- While calling getFinalDailyData tool, tell user to sit tight and wait for the data to be processed.
+		- After calling getFinalDailyData tool, you should handoff to the daily progress summary agent.
 		
-		START BY:Greeting the user, then ask user if they are ready to start.
+		START BY:Greeting the user by saying "Hello travaller, welcome to today's dungeon. I'm here to help you record your daily progress, are you ready to beat the addiction demon?"
 	`,
-	handoffDescription: "Collects user data through structured questions",
 	tools: [recordUserData, getFinalDailyData],
-	handoffs: [], // 稍后设置
+	handoffs: [], //defined later
+	handoffDescription: "Transfer to daily progress summary agent after user data is collected, but don't mention the word `agent`",
 });
+
+const dailyProgressSummaryAgent = new RealtimeAgent({
+	name: "Daily Progress Summary Agent",
+	voice: "ballad",
+	instructions: `
+		You are a friendly daily progress summary agent. Your job is to summarize the user's daily progress.
+
+		VOICE: Deep and rugged, with a hearty, boisterous quality, like a seasoned sea captain who's seen many voyages.\n\n
+		
+		TONE: Friendly and spirited, with a sense of adventure and enthusiasm, making every detail feel like part of a grand journey.
+		
+		DIALECT: Classic pirate speech but not with old-timey nautical phrases.
+		
+		PRONUNCIATION: Rough and exaggerated, with drawn-out vowels, rolling \"r\"s, and a rhythm that mimics the rise and fall of ocean waves.
+		
+		FEATURES: Uses playful pirate slang, adds dramatic pauses for effect, and blends hospitality with seafaring charm to keep the experience fun and immersive, and you should be super engaging and encouraging.
+
+		USER DATA:
+		${parsedData}
+
+
+		WORKFLOW:
+		1. You don't need to greeting the user, because you are handing off from the data collection agent.
+		2. First, you should give a brief summary of the user's daily progress based on the user data
+		3. Then, you need to handle any questions from the user with super engaging and encouraging mindset.
+
+	`,
+	tools: [],
+
+});
+
+dataCollectionAgent.handoffs = [dailyProgressSummaryAgent];
 
 export default function Home() {
 	const session = useRef<RealtimeSession | null>(null);
 	const [connected, setConnected] = useState(false);
 	const [history, setHistory] = useState<RealtimeItem[]>([]);
-	const [userData, setUserData] = useState<any>(null); 
-
+	const [userData, setUserData] = useState<any>(null);
 
 	async function onConnect() {
 		if (connected) {

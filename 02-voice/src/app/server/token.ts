@@ -13,3 +13,15 @@ export async function getSessionToken() {
 
   return session.client_secret.value;
 }
+
+export async function getSessionTokenMini() {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const session = await openai.beta.realtime.sessions.create({
+    model: "gpt-4o-mini-realtime-preview",
+  });
+
+  return session.client_secret.value;
+}
