@@ -1,16 +1,16 @@
-"use client";
+'use client';
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from 'react';
 import {
   RealtimeAgent,
   RealtimeItem,
   RealtimeSession,
   tool,
   TransportEvent,
-} from "@openai/agents-realtime";
-import { addToMemory, getSessionToken } from "./server/token";
-import z from "zod";
-import { runDailyDataParser } from "./server/AIs";
+} from '@openai/agents-realtime';
+import { addToMemory, getSessionToken } from './server/token';
+import z from 'zod';
+import { runDailyDataParser } from './server/AIs';
 
 // 用户数据存储
 let collectedUserData: Record<string, string> = {};
@@ -22,8 +22,8 @@ const resetDataCollection = () => {
 
 // 数据收集工具
 const recordUserData = tool({
-  name: "recordUserData",
-  description: "Record user data during the interview process",
+  name: 'recordUserData',
+  description: 'Record user data during the interview process',
   parameters: z.object({
     field: z
       .string()
@@ -31,20 +31,20 @@ const recordUserData = tool({
         "The field name (e.g., 'daily_cigarettes', 'daily_sleep', 'daily_feeling', 'daily_reason')"
       ),
     value: z.string().describe("The user's response"),
-    isComplete: z.boolean().describe("Whether all data collection is complete"),
+    isComplete: z.boolean().describe('Whether all data collection is complete'),
   }),
   execute: async ({ field, value, isComplete }) => {
     // 保存数据
     collectedUserData[field] = value;
     console.log(`Recording ${field}: ${value}`);
-    console.log("Current collected data:", collectedUserData);
+    console.log('Current collected data:', collectedUserData);
 
     if (isComplete) {
       // 触发数据传输给 parse agent
-      console.log("Data collection complete! Sending to parse agent...");
+      console.log('Data collection complete! Sending to parse agent...');
 
       // 调用 parse agent
-      const structuredData = await sendToParseAgent(collectedUserData);
+      await sendToParseAgent(collectedUserData);
 
       return `Data collection completed successfully! Here's what I collected: ${JSON.stringify(
         collectedUserData
@@ -55,26 +55,23 @@ const recordUserData = tool({
   },
 });
 
-let parsedData: any;
+let parsedData: unknown;
 
 const getFinalDailyData = tool({
-  name: "getFinalDailyData",
-  description:
-    "Get the final daily data from the user after all questions are answered",
+  name: 'getFinalDailyData',
+  description: 'Get the final daily data from the user after all questions are answered',
   parameters: z.object({}),
   execute: async () => {
-    console.log("getFinalDailyData called with data:", collectedUserData);
+    console.log('getFinalDailyData called with data:', collectedUserData);
 
     // 确保有数据
     if (Object.keys(collectedUserData).length === 0) {
-      console.error("No collected data found!");
-      return "Error: No data has been collected yet.";
+      console.error('No collected data found!');
+      return 'Error: No data has been collected yet.';
     }
 
     // 调用解析 agent 获取结构化数据
-    const parsedData = await runDailyDataParser(
-      JSON.stringify(collectedUserData)
-    );
+    const parsedData = await runDailyDataParser(JSON.stringify(collectedUserData));
 
     // 现在可以安全地重置数据了
     resetDataCollection();
@@ -87,7 +84,7 @@ const getFinalDailyData = tool({
 async function sendToParseAgent(rawData: Record<string, string>) {
   // 这里应该调用你的 parse agent
   // 现在只是模拟处理
-  console.log("Sending to parse agent:", rawData);
+  console.log('Sending to parse agent:', rawData);
 
   // 模拟结构化输出
   const structuredData = {
@@ -98,59 +95,56 @@ async function sendToParseAgent(rawData: Record<string, string>) {
       daily_reason: rawData.daily_reason,
     },
     collected_at: new Date().toISOString(),
-    status: "processed",
+    status: 'processed',
   };
 
   return structuredData;
 }
 
 // Function to store chat history to memory
-async function storeChatHistoryToMemory(
-  history: RealtimeItem[],
-  userId: string = "default_user"
-) {
-  console.log("saving history to memory");
+async function storeChatHistoryToMemory(history: RealtimeItem[], userId: string = 'default_user') {
+  console.log('saving history to memory');
   console.log(history);
   try {
     // Convert RealtimeItem history to mem0ai message format
     const messages = history
-      .filter((item) => item.type === "message")
+      .filter((item) => item.type === 'message')
       .map((item) => {
         // Extract content from the content array
-        let content = "";
+        let content = '';
         if (Array.isArray(item.content)) {
           // Handle different content types
           content = item.content
             .map((contentItem) => {
-              if (contentItem.type === "input_audio" && contentItem.transcript) {
+              if (contentItem.type === 'input_audio' && contentItem.transcript) {
                 return contentItem.transcript;
-              } else if (contentItem.type === "audio" && contentItem.transcript) {
+              } else if (contentItem.type === 'audio' && contentItem.transcript) {
                 return contentItem.transcript;
-              } else if (contentItem.type === "text") {
+              } else if (contentItem.type === 'text') {
                 return contentItem.text;
               }
-              return "";
+              return '';
             })
             .filter(Boolean)
-            .join(" ");
-        } else if (typeof item.content === "string") {
+            .join(' ');
+        } else if (typeof item.content === 'string') {
           content = item.content;
         }
-        
+
         return {
-          role: item.role as "user" | "assistant",
+          role: item.role as 'user' | 'assistant',
           content: content || `[${item.role} message]`,
         };
       })
       .filter((msg) => msg.content.trim().length > 0);
-    
+
     console.log(messages);
-    
+
     // Store chat history
     if (messages.length > 0) {
       // Add timestamp message to indicate when the dialogue occurred
       const timestampMessage = {
-        role: "assistant" as const,
+        role: 'assistant' as const,
         content: `Dialogue session recorded at: ${new Date().toLocaleString('en-US', {
           timeZone: 'America/New_York',
           year: 'numeric',
@@ -159,37 +153,36 @@ async function storeChatHistoryToMemory(
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          timeZoneName: 'short'
-        })}`
+          timeZoneName: 'short',
+        })}`,
       };
-      
+
       const messagesWithTimestamp = [...messages, timestampMessage];
-      
+
       const result = await addToMemory(messagesWithTimestamp, userId);
       if (result.success) {
-        console.log("Chat history stored to memory successfully");
+        console.log('Chat history stored to memory successfully');
       } else {
-        console.error("Failed to store chat history:", result.error);
+        console.error('Failed to store chat history:', result.error);
       }
     }
 
     // Extract and store structured results
     await extractAndStoreStructuredResults(messages, userId);
-    
   } catch (error) {
-    console.error("Error storing chat history to memory:", error);
+    console.error('Error storing chat history to memory:', error);
   }
 }
 
 // Function to extract structured results and store them separately
 async function extractAndStoreStructuredResults(
-  messages: Array<{ role: "user" | "assistant"; content: string }>,
-  userId: string = "default_user"
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  userId: string = 'default_user'
 ) {
   try {
     // Look for structured data in assistant messages
     const structuredResults = messages
-      .filter((msg) => msg.role === "assistant")
+      .filter((msg) => msg.role === 'assistant')
       .map((msg) => {
         try {
           // Try to parse JSON structures from assistant responses
@@ -198,7 +191,7 @@ async function extractAndStoreStructuredResults(
             const parsedData = JSON.parse(jsonMatch[0]);
             return parsedData;
           }
-        } catch (e) {
+        } catch {
           // Not valid JSON, skip
         }
         return null;
@@ -208,7 +201,7 @@ async function extractAndStoreStructuredResults(
     // Also check for collected user data if it exists
     if (Object.keys(collectedUserData).length > 0) {
       const userStructuredData = {
-        type: "user_profile",
+        type: 'user_profile',
         data: {
           personal_info: {
             full_name: collectedUserData.name,
@@ -220,21 +213,22 @@ async function extractAndStoreStructuredResults(
             location: collectedUserData.city,
           },
           collected_at: new Date().toISOString(),
-          status: "processed",
+          status: 'processed',
         },
-        user_name: collectedUserData.name || "Unknown User"
+        user_name: collectedUserData.name || 'Unknown User',
       };
       structuredResults.push(userStructuredData);
     }
 
     // Store structured results with user-specific naming
     for (const structuredData of structuredResults) {
-      const userName = structuredData.user_name || structuredData.data?.personal_info?.full_name || userId;
+      const userName =
+        structuredData.user_name || structuredData.data?.personal_info?.full_name || userId;
       const structuredMessage = [
         {
-          role: "assistant" as const,
-          content: `Structured data for ${userName}: ${JSON.stringify(structuredData, null, 2)}`
-        }
+          role: 'assistant' as const,
+          content: `Structured data for ${userName}: ${JSON.stringify(structuredData, null, 2)}`,
+        },
       ];
 
       const result = await addToMemory(structuredMessage, userId);
@@ -245,14 +239,14 @@ async function extractAndStoreStructuredResults(
       }
     }
   } catch (error) {
-    console.error("Error extracting and storing structured results:", error);
+    console.error('Error extracting and storing structured results:', error);
   }
 }
 
 // 数据收集 Agent
 const dataCollectionAgent = new RealtimeAgent({
-  name: "Data Collection Agent",
-  voice: "ballad",
+  name: 'Data Collection Agent',
+  voice: 'ballad',
   instructions: `
 		You are a friendly data collection agent. Your job is to collect user information through a structured interview.
 
@@ -299,8 +293,8 @@ const dataCollectionAgent = new RealtimeAgent({
 });
 
 const dailyProgressSummaryAgent = new RealtimeAgent({
-  name: "Daily Progress Summary Agent",
-  voice: "ballad",
+  name: 'Daily Progress Summary Agent',
+  voice: 'ballad',
   instructions: `
 		You are a friendly daily progress summary agent. Your job is to summarize the user's daily progress.
 
@@ -330,120 +324,118 @@ const dailyProgressSummaryAgent = new RealtimeAgent({
 dataCollectionAgent.handoffs = [dailyProgressSummaryAgent];
 
 export default function Home() {
-	const session = useRef<RealtimeSession | null>(null);
-	const [connected, setConnected] = useState(false);
-	const [history, setHistory] = useState<RealtimeItem[]>([]);
-	const [userData, setUserData] = useState<any>(null);
-	const [username, setUsername] = useState<string>("");
+  const session = useRef<RealtimeSession | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [history, setHistory] = useState<RealtimeItem[]>([]);
+  const [userData] = useState<Record<string, unknown> | null>(null);
+  const [username, setUsername] = useState<string>('');
 
-	async function onConnect() {
-		if (connected) {
-			// Immediately update UI to show disconnecting state
-			setConnected(false);
-			session.current?.close();
-			
-			// Store to memory in background without blocking UI
-			const userId = username.trim() || "anonymous_user";
-			storeChatHistoryToMemory(history, userId).catch(error => {
-				console.error("Failed to store chat history:", error);
-				// Could show a toast notification about storage failure in the future
-			});
-		} else {
-			const token = await getSessionToken();
-			session.current = new RealtimeSession(dataCollectionAgent, {
-				model: "gpt-4o-realtime-preview-2025-06-03",
-			});
-			session.current.on("transport_event", (event) => {
-				// This event provides high-level transport status information.
-				console.log("High-level transport event:", event);
-			});
+  async function onConnect() {
+    if (connected) {
+      // Immediately update UI to show disconnecting state
+      setConnected(false);
+      session.current?.close();
 
-			// For more granular tracking of the conversation and agent's activities,
-			// you can listen to all events on the transport layer. This gives you
-			// a detailed view of everything happening, such as speech-to-text results,
-			// audio generation, and agent state changes.
-			session.current.transport.on("*", (event: TransportEvent) => {
-				console.log(`Detailed event:`, event);
-			});
+      // Store to memory in background without blocking UI
+      const userId = username.trim() || 'anonymous_user';
+      storeChatHistoryToMemory(history, userId).catch((error) => {
+        console.error('Failed to store chat history:', error);
+        // Could show a toast notification about storage failure in the future
+      });
+    } else {
+      const token = await getSessionToken();
+      session.current = new RealtimeSession(dataCollectionAgent, {
+        model: 'gpt-4o-realtime-preview-2025-06-03',
+      });
+      session.current.on('transport_event', (event) => {
+        // This event provides high-level transport status information.
+        console.log('High-level transport event:', event);
+      });
 
-			session.current.on("history_updated", (history) => {
-				// This event is best for tracking the user-facing conversation history.
-				setHistory(history);
-			});
-			session.current.on(
-				"tool_approval_requested",
-				async (_context, _agent, approvalRequest) => {
-					prompt("Approve or deny the tool call?");
-					session.current?.approve(approvalRequest.approvalItem);
-				}
-			);
-			await session.current.connect({
-				apiKey: token,
-			});
-			setConnected(true);
-		}
-	}
+      // For more granular tracking of the conversation and agent's activities,
+      // you can listen to all events on the transport layer. This gives you
+      // a detailed view of everything happening, such as speech-to-text results,
+      // audio generation, and agent state changes.
+      session.current.transport.on('*', (event: TransportEvent) => {
+        console.log(`Detailed event:`, event);
+      });
 
-	return (
-		<div className="p-8">
-			<h1 className="text-2xl font-bold mb-4">Daily Progress Voice Agent</h1>
-			<div className="mb-4 p-4 bg-blue-50 rounded-lg">
-				<h3 className="font-semibold text-blue-800 mb-2">
-					Welcome to your daily progress tracker!
-				</h3>
-				<p className="text-blue-700">
-					Enter your name below and click Connect to start recording your daily progress with our friendly pirate captain guide.
-				</p>
-			</div>
-			
-			<div className="mb-4">
-				<label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-					Your Name (for memory storage)
-				</label>
-				<input
-					id="username"
-					type="text"
-					value={username}
-					onChange={(e) => setUsername(e.target.value)}
-					placeholder="Enter your name..."
-					className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-					disabled={connected}
-				/>
-				{username.trim() && (
-					<p className="mt-1 text-sm text-green-600">
-						Your progress will be saved under: "{username.trim()}"
-					</p>
-				)}
-				{!username.trim() && (
-					<p className="mt-1 text-sm text-gray-500">
-						Leave empty to use "anonymous_user"
-					</p>
-				)}
-			</div>
-			
-			<button
-				onClick={onConnect}
-				className="bg-black text-white p-2 rounded-md hover:bg-gray-800 cursor-pointer disabled:bg-gray-400 disabled:cursor-not-allowed"
-			>
-				{connected ? "Disconnect" : "Connect"}
-			</button>
-			<ul>
-				{history
-					.filter((item) => item.type === "message")
-					.map((item) => (
-						<li key={item.itemId}>
-							{item.role}: {JSON.stringify(item.content)}
-						</li>
-					))}
-			</ul>
-			{userData && (
-				<div className="mt-4 p-4 bg-gray-100 rounded-lg">
-					<h3 className="font-semibold mb-2">Parsed User Data:</h3>
-					<pre className="bg-white p-2 rounded overflow-auto">
-						{JSON.stringify(userData, null, 2)}
-					</pre>
-				</div>
-			)}
-		</div>
-	);
+      session.current.on('history_updated', (history) => {
+        // This event is best for tracking the user-facing conversation history.
+        setHistory(history);
+      });
+      session.current.on('tool_approval_requested', async (_context, _agent, approvalRequest) => {
+        prompt('Approve or deny the tool call?');
+        session.current?.approve(approvalRequest.approvalItem);
+      });
+      await session.current.connect({
+        apiKey: token,
+      });
+      setConnected(true);
+    }
+  }
+
+  return (
+    <div className="p-8">
+      <h1 className="text-2xl font-bold mb-4">Daily Progress Voice Agent</h1>
+      <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+        <h3 className="font-semibold text-blue-800 mb-2">
+          Welcome to your daily progress tracker!
+        </h3>
+        <p className="text-blue-700">
+          Enter your name below and click Connect to start recording your daily progress with our
+          friendly pirate captain guide.
+        </p>
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+          Your Name (for memory storage)
+        </label>
+        <input
+          id="username"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter your name..."
+          className="w-full max-w-sm px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          disabled={connected}
+        />
+        {username.trim() && (
+          <p className="mt-1 text-sm text-green-600">
+            Your progress will be saved under: &quot;{username.trim()}&quot;
+          </p>
+        )}
+        {!username.trim() && (
+          <p className="mt-1 text-sm text-gray-500">
+            Leave empty to use &quot;anonymous_user&quot;
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={onConnect}
+        className="bg-black text-white p-2 rounded-md hover:bg-gray-800 cursor-pointer disabled:bg-gray-400 disabled:cursor-not-allowed"
+      >
+        {connected ? 'Disconnect' : 'Connect'}
+      </button>
+      <ul>
+        {history
+          .filter((item) => item.type === 'message')
+          .map((item) => (
+            <li key={item.itemId}>
+              {item.role}: {JSON.stringify(item.content)}
+            </li>
+          ))}
+      </ul>
+      {userData && (
+        <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+          <h3 className="font-semibold mb-2">Parsed User Data:</h3>
+          <pre className="bg-white p-2 rounded overflow-auto">
+            {JSON.stringify(userData, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }
